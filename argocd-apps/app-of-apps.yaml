@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/YOUR_USERNAME/gitops-platform.git  # Update with your repo
+    repoURL: https://github.com/vlamay/aws-eks-gitops-argo.git
     targetRevision: HEAD
     path: argocd-apps
   destination:
