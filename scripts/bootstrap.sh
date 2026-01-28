@@ -16,6 +16,8 @@ AWS_REGION="${AWS_REGION:-us-east-1}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 PROJECT_NAME="${PROJECT_NAME:-gitops}"
 TERRAFORM_DIR="terraform/environments/${ENVIRONMENT}"
+export TF_DATA_DIR="/tmp/tf_data_${ENVIRONMENT}"
+mkdir -p "$TF_DATA_DIR"
 ARGOCD_NAMESPACE="argocd"
 
 # Print functions
@@ -145,7 +147,7 @@ deploy_infrastructure() {
     
     # Initialize Terraform
     print_info "Initializing Terraform..."
-    terraform init
+    terraform init -reconfigure
     print_success "Terraform initialized"
     
     # Plan

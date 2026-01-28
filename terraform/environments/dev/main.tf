@@ -90,7 +90,7 @@ module "eks" {
       max_size        = 4
       min_size        = 1
       max_unavailable = 1
-      instance_types  = ["t3.large"]
+      instance_types  = ["t3.small"]
       capacity_type   = "ON_DEMAND"
       disk_size       = 50
       labels = {
@@ -106,7 +106,7 @@ module "eks" {
       max_size        = 3
       min_size        = 0
       max_unavailable = 1
-      instance_types  = ["t3.xlarge"]
+      instance_types  = ["t3.small"]
       capacity_type   = "SPOT"
       disk_size       = 100
       labels = {
@@ -117,7 +117,7 @@ module "eks" {
         {
           key    = "workload"
           value  = "mlops"
-          effect = "NoSchedule"
+          effect = "NO_SCHEDULE"
         }
       ]
       tags = {}
