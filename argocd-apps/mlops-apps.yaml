@@ -1,0 +1,65 @@
+# MLOps Applications
+# Kubeflow Pipelines, MLflow for ML experiment tracking
+---
+# MLflow for experiment tracking and model registry
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mlflow
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/YOUR_USERNAME/gitops-platform.git  # Update with your repo
+    targetRevision: HEAD
+    path: kubernetes/mlops/mlflow
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# Seldon Core for ML model serving (optional - needs GPU)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: seldon-core
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: https://storage.googleapis.com/seldon-charts
+    chart: seldon-core-operator
+    targetRevision: 1.17.1
+    helm:
+      values: |
+        usageMetrics:
+          enabled: false
+        istio:
+          enabled: false
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: seldon-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

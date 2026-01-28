@@ -1,0 +1,235 @@
+# Observability Stack Applications
+# Prometheus, Grafana, Loki for monitoring and logging
+---
+# Kube-Prometheus-Stack (Prometheus + Grafana + AlertManager)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 55.5.0
+    helm:
+      values: |
+        fullnameOverride: prometheus
+        
+        # Prometheus configuration
+        prometheus:
+          prometheusSpec:
+            retention: 7d
+            retentionSize: 10GB
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                cpu: 1000m
+                memory: 2Gi
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp3
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 20Gi
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - prometheus.local
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+        
+        # Grafana configuration
+        grafana:
+          enabled: true
+          adminPassword: admin  # Change in production!
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - grafana.local
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          persistence:
+            enabled: true
+            storageClassName: gp3
+            size: 5Gi
+          sidecar:
+            dashboards:
+              enabled: true
+              searchNamespace: ALL
+            datasources:
+              enabled: true
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki:3100
+              access: proxy
+              isDefault: false
+        
+        # AlertManager configuration
+        alertmanager:
+          alertmanagerSpec:
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 200m
+                memory: 256Mi
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: gp3
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 2Gi
+        
+        # Node Exporter
+        nodeExporter:
+          enabled: true
+        
+        # Kube State Metrics
+        kubeStateMetrics:
+          enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+---
+# Loki for log aggregation
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: loki
+    targetRevision: 5.41.4
+    helm:
+      values: |
+        loki:
+          auth_enabled: false
+          commonConfig:
+            replication_factor: 1
+          storage:
+            type: filesystem
+          schemaConfig:
+            configs:
+              - from: 2024-01-01
+                store: tsdb
+                object_store: filesystem
+                schema: v12
+                index:
+                  prefix: loki_index_
+                  period: 24h
+        
+        singleBinary:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          persistence:
+            enabled: true
+            storageClass: gp3
+            size: 10Gi
+        
+        read:
+          replicas: 0
+        
+        write:
+          replicas: 0
+        
+        backend:
+          replicas: 0
+        
+        gateway:
+          enabled: false
+        
+        monitoring:
+          serviceMonitor:
+            enabled: true
+            namespace: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+# Promtail for log collection
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: promtail
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: promtail
+    targetRevision: 6.15.3
+    helm:
+      values: |
+        config:
+          clients:
+            - url: http://loki:3100/loki/api/v1/push
+        
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        
+        serviceMonitor:
+          enabled: true
+          namespace: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
